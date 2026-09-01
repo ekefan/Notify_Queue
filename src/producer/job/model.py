@@ -16,7 +16,6 @@ class Priority(int, Enum):
     high = 2
 
 class ScheduleJobReq(BaseModel):
-    idempotency_key: str
     recipient: UUID
     channel: Channel
     payload: dict[str, Any]
@@ -36,8 +35,5 @@ class ScheduledJobResp(BaseModel):
     id: UUID
     idempotency_key: str
     recipient: UUID
-    channel: Channel
     status: str
-    scheduled_for: datetime
-    priority: Priority
     created_at: datetime
