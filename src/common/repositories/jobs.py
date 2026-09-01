@@ -8,7 +8,7 @@ from common.models import Job
 
 
 class JobRepository:
-    """Database operations for jobs; business rules belong in JobService."""
+    """Shared persistence operations for Jobs."""
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session

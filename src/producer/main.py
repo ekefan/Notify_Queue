@@ -5,13 +5,13 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.database import get_session
+from common.repositories.jobs import JobRepository
 from producer.job.model import (
     JobStatusResp,
     ScheduleJobReq,
     ScheduleJobResp,
     ScheduledJobResp,
 )
-from producer.job.repository import JobRepository
 from producer.job.service import JobNotFoundError, JobService
 
 app: FastAPI = FastAPI()
@@ -45,7 +45,7 @@ async def schedule_job(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "message": "idempotency key already belongs to an existing job",
-                "job_id": job_response.id,
+                "job_id": str(job_response.id),
                 "status": job_response.status
             },
         )

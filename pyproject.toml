@@ -15,3 +15,15 @@ package = false
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: requires a Docker daemon and starts PostgreSQL",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4,<10",
+    "pytest-asyncio>=1.2,<2",
+    "testcontainers[postgres]>=4.13,<5",
+]

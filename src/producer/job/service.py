@@ -4,8 +4,8 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 
 from common.models import Job
+from common.repositories.jobs import JobRepository
 from producer.job.model import ScheduleJobReq
-from producer.job.repository import JobRepository
 
 
 class JobNotFoundError(Exception):
@@ -36,6 +36,7 @@ class JobService:
             payload=request.payload,
             scheduled_for=request.scheduled_for,
             priority=request.priority.value,
+            status="pending",
         )
 
         try:
