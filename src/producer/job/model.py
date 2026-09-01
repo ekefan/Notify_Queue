@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class Channel(str, Enum):
     sms = "sms"
@@ -16,7 +16,9 @@ class Priority(int, Enum):
     high = 2
 
 class ScheduleJobReq(BaseModel):
-    recipient: UUID
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    recipient: str = Field(min_length=1, max_length=512)
     channel: Channel
     payload: dict[str, Any]
     scheduled_for: datetime
@@ -32,8 +34,31 @@ class ScheduleJobReq(BaseModel):
         return v
 
 class ScheduledJobResp(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     idempotency_key: str
-    recipient: UUID
+    recipient: str
+    channel: Channel
+    payload: dict[str, Any]
+    scheduled_for: datetime
+    priority: Priority
     status: str
+    attempts: int
     created_at: datetime
+
+
+class ScheduleJobResp(ScheduledJobResp):
+    deduplicated: bool
+
+
+class JobStatusResp(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    status: str
+    attempts: int
+    max_attempts: int
+    next_retry_at: datetime | None
+    sent_at: datetime | None
+    last_error: str | None
