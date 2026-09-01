@@ -19,7 +19,7 @@ def payload():
         "recipient": "person@example.com",
         "channel": "email",
         "payload": {"subject": "Hello"},
-        "scheduled_for": datetime(2026, 9, 2, 10, tzinfo=timezone.utc).isoformat(),
+        "send_at": datetime(2026, 9, 2, 10, tzinfo=timezone.utc).isoformat(),
         "priority": 2,
     }
 

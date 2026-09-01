@@ -1,22 +1,31 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Index, String, Integer, DateTime, Text
+from sqlalchemy import Index, String, Integer, DateTime, Text, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from .database import Base
 
 
-
 class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
-        Index("ix_jobs_claimable", "status", "priority", "scheduled_for"),
+        Index(
+            "ix_jobs_claimable_partial",
+            "priority",
+            "scheduled_for",
+            postgresql_where=text("status IN ('pending', 'failed')")
+        ),
+        Index(
+            "ix_jobs_recipient_sent_window",
+            "recipient",
+            "status",
+            "sent_at"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    # Opaque channel-specific destination: email, phone number, or push token.
     recipient: Mapped[str] = mapped_column(String(512), nullable=False)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
@@ -34,4 +43,4 @@ class Job(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     def __repr__(self) -> str:
-        return f"Job(id={self.id}, status=${self.status}, attempts=${self.attempts})"
+        return f"Job(id={self.id}, status={self.status}, attempts={self.attempts})"

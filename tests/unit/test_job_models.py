@@ -11,7 +11,7 @@ def valid_request(**overrides):
         "recipient": "person@example.com",
         "channel": "email",
         "payload": {"subject": "Hello"},
-        "scheduled_for": datetime(2026, 9, 2, 10, tzinfo=timezone.utc),
+        "send_at": datetime(2026, 9, 2, 10, tzinfo=timezone.utc),
         "priority": 2,
     }
     values.update(overrides)
@@ -35,5 +35,5 @@ def test_recipient_must_be_non_empty_and_bounded(recipient):
 def test_scheduled_time_must_be_timezone_aware():
     with pytest.raises(ValidationError, match="timezone-aware"):
         ScheduleJobReq.model_validate(
-            valid_request(scheduled_for=datetime(2026, 9, 2, 10))
+            valid_request(send_at=datetime(2026, 9, 2, 10))
         )

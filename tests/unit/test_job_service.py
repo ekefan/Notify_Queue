@@ -14,7 +14,7 @@ def request() -> ScheduleJobReq:
         recipient="person@example.com",
         channel="email",
         payload={"subject": "Welcome"},
-        scheduled_for=datetime(2026, 9, 2, 10, tzinfo=timezone.utc),
+        send_at=datetime(2026, 9, 2, 10, tzinfo=timezone.utc),
         priority=2,
     )
 

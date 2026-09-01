@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from common.database import Base, DATABASE_URL
+from common.database import Base
 from common import models  # noqa: F401 — registers Job on Base.metadata
 
 
@@ -15,7 +15,7 @@ from common import models  # noqa: F401 — registers Job on Base.metadata
 # access to the values within the .ini file in use.
 config = context.config
 
-config.set_main_option("sqlalchemy.url", str(DATABASE_URL))
+config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:

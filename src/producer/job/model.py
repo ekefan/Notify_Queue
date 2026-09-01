@@ -63,3 +63,7 @@ class JobStatusResp(BaseModel):
     scheduled_for: datetime
     sent_at: datetime | None
     last_error: str | None
+
+class WebhookEvent(BaseModel):
+    job_id: UUID
+    status: str

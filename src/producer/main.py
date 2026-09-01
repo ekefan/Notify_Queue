@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, logger, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.database import get_session
@@ -11,11 +11,15 @@ from producer.job.model import (
     ScheduleJobReq,
     ScheduleJobResp,
     ScheduledJobResp,
+    WebhookEvent,
 )
 from producer.job.service import JobNotFoundError, JobService
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 app: FastAPI = FastAPI()
-
+logger  = logging.getLogger("producer api")
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
@@ -54,8 +58,9 @@ async def schedule_job(
     )
 
 @app.post("/webhook/receive")
-async def handle_job_webhook():
-    return {"job_stat": "handling webhook"}
+async def handle_job_webhook(event: WebhookEvent):
+    logger.info("webhook received: job_id=%s status=%s", event.job_id, event.status)
+    return {"received": True, "job_id": str(event.job_id), "status": event.status}
 
 @app.get("/jobs/metrics")
 async def job_metrics(service: JobServiceDep):
