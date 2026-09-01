@@ -3,22 +3,29 @@ services:
     image: postgres:16
     environment:
       POSTGRES_DB: notify_queue
+      POSTGRES_USER: notify_queue
+      POSTGRES_PASSWORD: notify_queue
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
     
   api:
     build: .
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn producer.main:app --host 0.0.0.0 --port 8000
     ports: ["8000:8000"]
+    env_file: .env
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+
   
   worker:
     build: .
-    command: python -m src.worker
+    command: python -m cosumer.main
+    env_file: .env
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 # docker compose up --scale worker=3
 
 volumes:
