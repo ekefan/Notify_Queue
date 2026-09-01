@@ -8,12 +8,17 @@ services:
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notify_queue -d notify_queue"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     
   api:
     build: .
-    command: uvicorn producer.main:app --host 0.0.0.0 --port 8000
-    ports: ["8000:8000"]
-    env_file: .env
+    command: sh -c "alembic upgrade head && uvicorn producer.main:app --host 0.0.0.0 --port 8000"
+    ports: ["${API_PORT:-8000}:8000"]
+    env_file: .env.dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -21,11 +26,13 @@ services:
   
   worker:
     build: .
-    command: python -m cosumer.main
-    env_file: .env
+    command: python -m consumer.main
+    env_file: .env.dev
     depends_on:
       postgres:
         condition: service_healthy
+      api:
+        condition: service_started
 # docker compose up --scale worker=3
 
 volumes:

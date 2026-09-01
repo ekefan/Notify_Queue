@@ -34,11 +34,11 @@ class JobService:
             recipient=request.recipient,
             channel=request.channel.value,
             payload=request.payload,
-            scheduled_for=request.scheduled_for,
+            scheduled_for=request.send_at,
             priority=request.priority.value,
             status="pending",
         )
-
+    
         try:
             await self.repository.add(job)
             await self.repository.session.commit()

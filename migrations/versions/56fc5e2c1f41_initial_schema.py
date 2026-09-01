@@ -1,8 +1,8 @@
-"""create jobs table
+"""initial schema
 
-Revision ID: b45253b4902f
+Revision ID: 56fc5e2c1f41
 Revises: 
-Create Date: 2026-09-01 02:21:20.936059
+Create Date: 2026-09-01 20:03:07.570621
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'b45253b4902f'
+revision: str = '56fc5e2c1f41'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.create_table('jobs',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('idempotency_key', sa.String(length=255), nullable=False),
-    sa.Column('recipient', sa.UUID(), nullable=False),
+    sa.Column('recipient', sa.String(length=512), nullable=False),
     sa.Column('channel', sa.String(length=20), nullable=False),
     sa.Column('payload', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
     sa.Column('scheduled_for', sa.DateTime(timezone=True), nullable=False),
@@ -33,8 +33,6 @@ def upgrade() -> None:
     sa.Column('attempts', sa.Integer(), nullable=False),
     sa.Column('max_attempts', sa.Integer(), nullable=False),
     sa.Column('next_retry_at', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('claimed_by', sa.String(length=100), nullable=True),
-    sa.Column('claimed_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('sent_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('last_error', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),

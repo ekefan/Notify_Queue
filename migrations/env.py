@@ -4,22 +4,18 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
 from alembic import context
-
-import os
-import sys
-
+import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from common.database import Base, DATABASE_URL
+from common import models  # noqa: F401 — registers Job on Base.metadata
 
-from src.common.database import Base   # adjust name if your Base lives elsewhere
-from src.common import models          # noqa: F401 — import so Job registers on Base.metadata
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
-
+config.set_main_option("sqlalchemy.url", str(DATABASE_URL))
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, DateTime, Text
+from sqlalchemy import Index, String, Integer, DateTime, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -10,6 +10,9 @@ from .database import Base
 
 class Job(Base):
     __tablename__ = "jobs"
+    __table_args__ = (
+        Index("ix_jobs_claimable", "status", "priority", "scheduled_for"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)

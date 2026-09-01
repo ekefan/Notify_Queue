@@ -21,16 +21,16 @@ class ScheduleJobReq(BaseModel):
     recipient: str = Field(min_length=1, max_length=512)
     channel: Channel
     payload: dict[str, Any]
-    scheduled_for: datetime
+    send_at: datetime
     priority: Priority = Priority.normal
 
-    @field_validator("scheduled_for")
+    @field_validator("send_at")
     @classmethod
-    def scheduled_for_must_be_future_or_now(cls, v:datetime) -> datetime:
+    def send_at_must_be_future_or_now(cls, v:datetime) -> datetime:
         if v.tzinfo is None:
-            raise ValueError("scheduled_for must be timezone-aware")
+            raise ValueError("send_at must be timezone-aware")
         if v < datetime.now(timezone.utc).replace(year=datetime.now().year - 1):
-            raise ValueError("scheduled_for is implausibly far in the past")
+            raise ValueError("send_at is implausibly far in the past")
         return v
 
 class ScheduledJobResp(BaseModel):
@@ -60,5 +60,6 @@ class JobStatusResp(BaseModel):
     attempts: int
     max_attempts: int
     next_retry_at: datetime | None
+    scheduled_for: datetime
     sent_at: datetime | None
     last_error: str | None
