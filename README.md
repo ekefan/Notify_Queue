@@ -54,14 +54,11 @@ make producer-api
 uv run python seed.py --count 100
 ```
 
-For the PostgreSQL- consumer v1 stack instead, run:
+For the PostgreSQL consumer run:
 
 ```bash
 make consumer-v1
 ```
-
-Normal setup only applies existing migrations. When changing the schema, create a new
-one with `make migration name="describe change"`.
 
 ## Schedule a job
 
@@ -103,17 +100,8 @@ curl http://localhost:8000/metrics
 ```
 
 The lightweight product metrics endpoint reports pending, processing, sent, failed,
-and dead-lettered counts. `/metrics` exposes Prometheus text format.
-
-## Seed sample jobs
-
-When running Python on the host, use a host-facing database URL:
-
-```bash
-DATABASE_URL=postgresql+asyncpg://notify_queue:notify_queue@localhost:5432/notify_queue \
-DATABASE_POOL_SIZE=10 \
-uv run python seed.py --count 25
-```
+and dead-lettered counts. <br>
+`/metrics` exposes Prometheus text format.
 
 ## Tests
 
@@ -149,10 +137,12 @@ at-least-once dispatch with exactly-once external effect when the provider honor
 key.
 
 
-### Run v2 (recommended)
+### Run v2 (recommended architecture)
 
 ```bash
 make v2-up
+## if it fails because of used port run:
+make v2-up-port-8001
 ```
 
 This starts the full stack. The API applies all committed migrations with `alembic
@@ -169,10 +159,7 @@ RabbitMQ uses `notify_queue` / `notify_queue`; Grafana uses `admin` / `admin`.
 Use `make v2-logs` to follow logs and `make v2-down` to stop the stack.
 
 
-The v2 publish outbox is created by the scheduling API. The standalone seed script is
-primarily intended for exercising the PostgreSQL-polling v1 implementation.
-
-Create multiple jobs through the API so the v2 publisher can enqueue them:
+You can create multiple jobs through the API so the v2 publisher can enqueue them:
 
 ```bash
 ./add_job.sh 100
