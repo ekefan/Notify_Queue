@@ -1,7 +1,7 @@
 # Notify Queue
 
 
-[![Notify Queue demo](https://vumbnail.com/1223270266.jpg)](https://vimeo.com/1223270266)
+[![Notify Queue demo](https://vumbnail.com/1223282070.jpg)](https://vimeo.com/1223282070)
 
 
 Notify Queue is a distributed delayed job and notification delivery system.
@@ -49,7 +49,12 @@ make migrate
 make producer-api
 ```
 
-For the PostgreSQL-polling v1 stack instead, run:
+## Seed DB
+```bash
+uv run python seed.py --count 100
+```
+
+For the PostgreSQL- consumer v1 stack instead, run:
 
 ```bash
 make consumer-v1
