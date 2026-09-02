@@ -1,5 +1,9 @@
 # Notify Queue
 
+
+[![Notify Queue demo](https://vumbnail.com/1223270266.jpg)](https://vimeo.com/1223270266)
+
+
 Notify Queue is a distributed delayed job and notification delivery system.
 This implementation supports future delivery, priorities, concurrent workers, idempotent
 submission, configurable mock failures, exponential retries, dead-letter status,
