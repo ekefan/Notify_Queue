@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 
-from common.models import Job
+from common.models import Job, PublishOutbox
 from common.repositories.jobs import JobRepository
 from producer.job.model import ScheduleJobReq
 
@@ -41,6 +41,9 @@ class JobService:
     
         try:
             await self.repository.add(job)
+            self.repository.session.add(
+                PublishOutbox(job_id=job.id, available_at=job.scheduled_for)
+            )
             await self.repository.session.commit()
         except IntegrityError:
             await self.repository.session.rollback()

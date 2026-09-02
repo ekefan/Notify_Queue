@@ -1,0 +1,1 @@
+"""RabbitMQ-backed notification consumer."""

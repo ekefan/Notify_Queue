@@ -22,18 +22,100 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   
   worker:
     build: .
     command: python -m consumer.main
     env_file: .env.dev
+    profiles: ["v1"]
     depends_on:
       postgres:
         condition: service_healthy
       api:
-        condition: service_started
-# docker compose up --scale worker=3
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    profiles: ["v2"]    
+    environment:
+      RABBITMQ_DEFAULT_USER: notify_queue
+      RABBITMQ_DEFAULT_PASS: notify_queue
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "15692:15692"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  publisher:
+    build: .
+    command: python -m publisher.main
+    env_file: .env.dev
+    profiles: ["v2"]
+    restart: unless-stopped
+    ports: ["9101:9101"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  worker-v2:
+    build: .
+    command: python -m consumer_v2.main
+    env_file: .env.dev
+    profiles: ["v2"]
+    restart: unless-stopped
+    expose: ["9102"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: postgresql://notify_queue:notify_queue@postgres:5432/notify_queue?sslmode=disable
+    profiles: ["v2"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:latest
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    profiles: ["v2"]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    profiles: ["v2"]
+    depends_on: [prometheus]
 
 volumes:
   pgdata:

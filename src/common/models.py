@@ -44,3 +44,35 @@ class Job(Base):
 
     def __repr__(self) -> str:
         return f"Job(id={self.id}, status={self.status}, attempts={self.attempts})"
+
+
+class PublishOutbox(Base):
+    """Durable request to publish a job to the ready-work broker."""
+
+    __tablename__ = "publish_outbox"
+    __table_args__ = (
+        Index(
+            "ix_publish_outbox_due",
+            "available_at",
+            "created_at",
+            postgresql_where=text("published_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

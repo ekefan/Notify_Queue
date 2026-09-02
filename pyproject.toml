@@ -3,10 +3,12 @@ name = "notify-queue"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "aio-pika>=10.0.1",
     "alembic>=1.19.1",
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.141.1",
     "httpx>=0.28.1",
+    "prometheus-client>=0.26.0",
     "sqlalchemy[asyncio]>=2.0.52",
 ]
 

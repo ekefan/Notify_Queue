@@ -1,13 +1,13 @@
 import asyncio
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
 from common.database import get_session
-from common.models import Job
+from common.models import Job, PublishOutbox
 from producer.main import app
 
 
@@ -39,7 +39,7 @@ async def client(session_factory):
 
 
 @pytest.mark.asyncio
-async def test_schedule_status_and_metrics(client):
+async def test_schedule_status_and_metrics(client, session_factory):
     response = await client.post(
         "/jobs", json=payload(), headers={"Idempotency-Key": "api-test"}
     )
@@ -55,6 +55,10 @@ async def test_schedule_status_and_metrics(client):
     metrics_response = await client.get("/jobs/metrics")
     assert metrics_response.status_code == 200
     assert metrics_response.json()["pending"] == 1
+
+    async with session_factory() as session:
+        outbox_count = await session.scalar(select(func.count(PublishOutbox.id)))
+    assert outbox_count == 1
 
 
 @pytest.mark.asyncio
@@ -91,6 +95,7 @@ async def test_concurrent_duplicate_submissions_create_one_job(client, session_f
         )
 
     responses = await asyncio.gather(*(submit() for _ in range(20)))
+    accepted = next(response for response in responses if response.status_code == 202)
 
     assert [response.status_code for response in responses].count(202) == 1
     assert [response.status_code for response in responses].count(409) == 19
@@ -100,4 +105,10 @@ async def test_concurrent_duplicate_submissions_create_one_job(client, session_f
                 Job.idempotency_key == "concurrent-test"
             )
         )
+        outbox_count = await session.scalar(
+            select(func.count(PublishOutbox.id)).where(
+                PublishOutbox.job_id == UUID(accepted.json()["id"])
+            )
+        )
     assert count == 1
+    assert outbox_count == 1

@@ -1,7 +1,8 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, logger, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, logger, status
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.database import get_session
@@ -14,6 +15,8 @@ from producer.job.model import (
     WebhookEvent,
 )
 from producer.job.service import JobNotFoundError, JobService
+from common.database import engine
+from observability.metrics import JOBS_BY_STATUS, observe_pool
 import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -65,6 +68,15 @@ async def handle_job_webhook(event: WebhookEvent):
 @app.get("/jobs/metrics")
 async def job_metrics(service: JobServiceDep):
     return await service.metrics()
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics(service: JobServiceDep):
+    counts = await service.metrics()
+    for job_status, count in counts.items():
+        JOBS_BY_STATUS.labels(status=job_status).set(count)
+    observe_pool(engine.pool)
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 # @app.get("/jobs", response_model=list[ScheduledJobResp])

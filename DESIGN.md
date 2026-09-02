@@ -1,8 +1,60 @@
-A realistic example:
+
+# Architecture evolution
+
+## Initial architecture: PostgreSQL polling
+
+```text
+Client
+  │
+  ▼
+FastAPI ──transaction──> PostgreSQL jobs
+                              ▲
+                              │ poll, rank, lock, and claim
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+                 worker 1           worker N
+                    │                   │
+                    └───────┬───────────┘
+                            ▼
+                   notification provider
+                            │
+                            ▼
+                  PostgreSQL status update
+```
+
+Version 1 uses PostgreSQL as both the authoritative state store and the work queue.
+Workers repeatedly search the `jobs` table for due `pending` or `failed` rows, rank
+them by priority and age, claim a small batch with `FOR UPDATE SKIP LOCKED`, and process
+the batch concurrently. This design is simple, durable, and avoids introducing a
+separate broker. Multiple workers can claim safely without processing the same row at
+the same time, and a recovery loop returns abandoned `processing` jobs to `pending`.
+
+### Scaling bottleneck
+
+The limiting operation is not inserting a job; it is repeatedly discovering the next
+jobs to run. Every polling worker asks PostgreSQL to filter the growing jobs table,
+identify due rows, calculate their effective priority, order the candidates, acquire
+row locks, and update the winners. When no work is available, workers still issue the
+polling query. Adding workers increases both delivery capacity and database polling,
+sorting, locking, and connection pressure.
+
+At low and moderate traffic this is a reasonable trade-off. As the due set and worker
+count grow, however, more application capacity produces more contention on the same
+database that also serves API requests and stores job state. Large bursts can make
+workers repeatedly rank a large eligible set, increase claim latency, consume the
+connection pool, and affect API latency. PostgreSQL also has to provide queue concerns
+such as priority selection, crash recovery, and backpressure in addition to its role as
+the system of record.
+
+A realistic starting workload is:
+
 - 5,000 users × 10 notifications/day = 50,000/day
 - Average throughput: approximately 0.6 notifications/second
 - At a 10× peak: approximately 6/second
-A small PostgreSQL deployment can handle that with:
+
+A PostgreSQL deployment can handle that with:
+
 - An index-friendly due-job query
 - Small batch claims
 - 5–10 worker tasks
@@ -11,18 +63,11 @@ A small PostgreSQL deployment can handle that with:
 - Archived terminal jobs
 - Proper connection-pool limits
 - Concurrency and load testing
-Consider RabbitMQ when measurements show:
-- Sustained throughput reaches hundreds of notifications/second
-- Queue age continuously increases during expected peak load
-- Claim-query p95 remains above 10 ms after basic tuning
-- PostgreSQL CPU remains above roughly 70%
-- Database contention affects API latency
-- Large bursts must survive worker/provider outages
-- Worker routing and backpressure become operational requirements
 
-# Version 2: PostgreSQL and RabbitMQ
 
-## Objective
+## V2 architecture: PostgreSQL and RabbitMQ
+
+### Objective
 
 Version 1 demonstrates the cost of repeatedly asking PostgreSQL to rank a large due
 set. Version 2 keeps PostgreSQL as the authoritative job-state store and moves ready
@@ -58,22 +103,26 @@ the producer service sends unpublished events and records RabbitMQ publisher con
 This relay is not a scheduling policy engine; it only closes the database-to-broker
 failure window.
 
-## Scheduling future jobs
+### Scheduling future jobs
 
-Immediate jobs are published as soon as their outbox event is available. For this demo,
-future jobs and retries use RabbitMQ's delayed-message exchange and carry the delay
-between `send_at` and publication time. The delayed-message plugin must be enabled in
-the RabbitMQ image and documented as an infrastructure dependency.
+The API inserts a `publish_outbox` event with `available_at = send_at` in the same
+transaction as the job. A single lightweight publisher selects a bounded batch from
+the partial `(available_at, created_at) WHERE published_at IS NULL` index. It publishes
+only events that are due and records the RabbitMQ publisher confirmation.
 
-This is a deliberate demo trade-off. Keeping millions of long-lived delayed messages
-in RabbitMQ increases broker recovery and storage pressure. A production system with
-large, far-future schedules would normally keep those schedules in PostgreSQL and use
-a small due-job publisher. The load comparison must state this boundary rather than
-claim that the broker removes time-based scheduling work in every deployment.
+This means RabbitMQ contains only ready work; it does not retain millions of long-lived
+delayed messages. The publisher still performs time-based scheduling, but it scans a
+narrow append-oriented outbox with one indexed query rather than having every worker
+rank and update the large jobs table. Multiple publisher instances can safely use
+`FOR UPDATE SKIP LOCKED` if publisher throughput later requires horizontal scaling.
 
-## Priority
+There is an unavoidable duplicate-publication window if the process dies after the
+broker confirms a message but before `published_at` commits. Consumers therefore treat
+messages as at least once and conditionally claim the authoritative PostgreSQL job.
 
-Declare the durable work queue with `x-max-priority`, using a small fixed range such as
+### Priority
+
+I declared the durable work queue with `x-max-priority`, using a small fixed range such as
 0 for low, 1 for normal, and 2 for high. The producer maps the persisted job priority
 onto the AMQP message priority. Among messages that are ready in RabbitMQ, higher
 priority messages are delivered first.
@@ -83,11 +132,11 @@ prefetch bounded so a worker does not reserve a large low-priority buffer while 
 work waits in RabbitMQ. Start with prefetch equal to, or slightly above, the worker's
 actual delivery concurrency and validate priority behavior under load.
 
-## Recipient rate limiting
+### Recipient rate limiting
 
 RabbitMQ does not provide arbitrary per-recipient hourly limits. Immediately before a
-provider call, the consumer atomically reserves recipient capacity in PostgreSQL (or
-Redis in a later measured optimization). If capacity is unavailable, it does not count
+provider call, the consumer atomically reserves recipient capacity in PostgreSQL. 
+If capacity is unavailable, it does not count
 as a delivery attempt. The consumer publishes a delayed replacement for the earliest
 eligible time, waits for publisher confirmation, persists the deferred state, and then
 acknowledges the current message.
@@ -97,7 +146,7 @@ consumers can simultaneously observe the final available slot. Failed sends rele
 their reservation, successful sends convert it to a recorded delivery, and abandoned
 reservations expire.
 
-## Consumer workflow
+### Consumer workflow
 
 Consumers receive a small prefetched buffer from RabbitMQ. For each message they:
 
@@ -116,7 +165,7 @@ crash leaves the message unacknowledged, so RabbitMQ redelivers it. Redelivery i
 expected and must be harmless: the database state, a unique delivery record, and the
 job ID used as the provider idempotency key protect the externally visible effect.
 
-## Job states
+### Job states
 
 ```text
 scheduled ──published/delay elapsed──> queued ──delivered──> processing
@@ -130,7 +179,7 @@ RabbitMQ message state and PostgreSQL job state can temporarily differ during cr
 Consumers always consult PostgreSQL before sending, and outbox publication is
 idempotent, so duplicate messages do not imply duplicate notification effects.
 
-## Demo-visible processing state
+### Demo-visible processing state
 
 Normal mock latency remains configurable in milliseconds. To make the `processing`
 metric observable during a presentation, 20 percent of mock deliveries take a random
@@ -145,7 +194,7 @@ This delay is a presentation/load-test setting, not a correctness mechanism. Met
 must be read while jobs are actively being consumed; no production state transition
 should be artificially delayed merely to make a counter non-zero.
 
-## Observability
+### Observability
 
 Version 2 includes Prometheus and Grafana. The minimum dashboard shows:
 
@@ -165,21 +214,16 @@ Services emit structured logs with stable events such as `job.scheduled`,
 `message.acknowledged`. Include job ID, worker ID, attempt, priority, trace ID, and
 duration where applicable. Hash recipients and never log notification payloads.
 
-## Verification and comparison
+### Measured v2 publisher baseline
 
-Before presenting Version 2, test:
+On the local Docker environment, the complete due-outbox publication path produced:
 
-- concurrent duplicate API submissions create one job and one logical publication;
-- RabbitMQ redelivery does not produce a duplicate delivery record;
-- high-priority ready work overtakes low-priority ready work with bounded prefetch;
-- concurrent consumers cannot exceed the last recipient capacity slot;
-- delayed jobs are not delivered before `send_at`;
-- retry delays grow exponentially and exhausted jobs reach the dead-letter exchange;
-- killing a consumer before acknowledgement causes safe redelivery;
-- losing RabbitMQ after the database commit is repaired by the publish outbox;
-- webhook failure never causes notification redelivery.
+- 683.3 messages/second with sequential publisher confirmations;
+- 1,422.4 messages/second with confirmation concurrency 25;
+- 1,506.3 messages/second with confirmation concurrency 50 and batch size 1,000.
 
-Run the same workload against Version 1 and Version 2. Capture throughput, claim or
-delivery latency, oldest-due age, database pressure, RabbitMQ depth, and recovery after
-failure. Version 1 explains the database ranking bottleneck; Version 2 demonstrates
-broker priority, buffering, acknowledgement, and backpressure behavior.
+Each run published 10,000 persistent messages into a dedicated RabbitMQ priority queue
+and committed `published_at` in an isolated PostgreSQL database. The small gain from 25
+to 50 indicates the local system was near a database/broker persistence knee rather
+than limited only by application concurrency. This is a publisher-stage benchmark,
+not an end-to-end delivery capacity claim.
