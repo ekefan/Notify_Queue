@@ -52,7 +52,7 @@ make producer-api
 For the PostgreSQL-polling v1 stack instead, run:
 
 ```bash
-docker compose --profile v1 up --build
+make consumer-v1
 ```
 
 Normal setup only applies existing migrations. When changing the schema, create a new

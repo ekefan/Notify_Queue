@@ -6,6 +6,9 @@ requirements:
 producer-api:
 	uv run fastapi dev src/producer/main.py
 
+consumer-v1:
+	PYTHONPATH=src uv run python -m consumer.main
+
 migrate:
 	uv run alembic upgrade head
 
